@@ -90,6 +90,7 @@ pg_strong_random(void *buf, size_t len)
 		RAND_poll();
 	}
 
+
 	if (RAND_bytes(buf, len) == 1)
 		return true;
 	return false;

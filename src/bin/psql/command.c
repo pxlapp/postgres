@@ -29,6 +29,7 @@
 #include "common.h"
 #include "common/logging.h"
 #include "common/string.h"
+#include "copilot/copilot.h"
 #include "copy.h"
 #include "crosstabview.h"
 #include "describe.h"
@@ -46,6 +47,7 @@
 #include "psqlscanslash.h"
 #include "settings.h"
 #include "variables.h"
+#include "copilot/pxl.h"
 
 /*
  * Editable database object types.
@@ -63,6 +65,8 @@ static backslashResult exec_command(const char *cmd,
 									PQExpBuffer query_buf,
 									PQExpBuffer previous_buf);
 static backslashResult exec_command_a(PsqlScanState scan_state, bool active_branch);
+static backslashResult exec_command_ai(PsqlScanState scan_state, bool active_branch,
+									   const char *cmd);
 static backslashResult exec_command_bind(PsqlScanState scan_state, bool active_branch);
 static backslashResult exec_command_C(PsqlScanState scan_state, bool active_branch);
 static backslashResult exec_command_connect(PsqlScanState scan_state, bool active_branch);
@@ -308,7 +312,9 @@ exec_command(const char *cmd,
 					   cmd);
 	}
 
-	if (strcmp(cmd, "a") == 0)
+    if (strcmp(cmd, "ai") == 0)
+		status = exec_command_ai(scan_state, active_branch, cmd);
+    else if (strcmp(cmd, "a") == 0)
 		status = exec_command_a(scan_state, active_branch);
 	else if (strcmp(cmd, "bind") == 0)
 		status = exec_command_bind(scan_state, active_branch);
@@ -453,6 +459,32 @@ exec_command_a(PsqlScanState scan_state, bool active_branch)
 		else
 			success = do_pset("format", "unaligned", &pset.popt, pset.quiet);
 	}
+
+	return success ? PSQL_CMD_SKIP_LINE : PSQL_CMD_ERROR;
+}
+
+/*
+ * \ai -- ask ai
+ */
+static backslashResult
+exec_command_ai(PsqlScanState scan_state, bool active_branch, const char *cmd)
+{
+	bool		success = true;
+	PQExpBuffer query = createPQExpBuffer();
+
+	if (active_branch)
+	{
+	    char *opt;
+		while ((opt = psql_scan_slash_option(scan_state, OT_NORMAL, NULL, false))) {
+			appendPQExpBufferStr(query, opt);
+			appendPQExpBufferChar(query, ' ');
+        }
+        if (query->len) {
+            pxl_chat(query->data);
+        }
+	}
+
+	destroyPQExpBuffer(query);
 
 	return success ? PSQL_CMD_SKIP_LINE : PSQL_CMD_ERROR;
 }
@@ -3746,6 +3778,8 @@ do_connect(enum trivalue reuse_previous_specification,
 		PQfinish(pset.dead_conn);
 		pset.dead_conn = NULL;
 	}
+
+	copilot_refresh_schema();
 
 	return true;
 }

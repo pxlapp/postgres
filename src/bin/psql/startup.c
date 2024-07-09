@@ -23,6 +23,7 @@
 #include "getopt_long.h"
 #include "help.h"
 #include "input.h"
+#include "copilot/copilot.h"
 #include "mainloop.h"
 #include "settings.h"
 
@@ -459,6 +460,7 @@ error:
 		if (!pset.quiet)
 			printf(_("Type \"help\" for help.\n\n"));
 		initializeInput(options.no_readline ? 0 : 1);
+		copilot_refresh_schema();
 		successResult = MainLoop(stdin);
 	}
 

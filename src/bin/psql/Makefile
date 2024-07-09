@@ -18,16 +18,20 @@ include $(top_builddir)/src/Makefile.global
 
 # make this available to TAP test scripts
 export with_readline
+export with_copilot
 
 REFDOCDIR= $(top_srcdir)/doc/src/sgml/ref
 
 override CPPFLAGS := -I. -I$(srcdir) -I$(libpq_srcdir) $(CPPFLAGS)
-LDFLAGS_INTERNAL += -L$(top_builddir)/src/fe_utils -lpgfeutils $(libpq_pgport)
+LDFLAGS_INTERNAL += -L$(top_builddir)/src/fe_utils -lpgfeutils
 
 OBJS = \
 	$(WIN32RES) \
 	command.o \
 	common.o \
+	copilot/copilot.o \
+	copilot/pxl.o \
+	copilot/sse.o \
 	copy.o \
 	crosstabview.o \
 	describe.o \
@@ -43,11 +47,13 @@ OBJS = \
 	tab-complete.o \
 	variables.o
 
-
 all: psql
 
 psql: $(OBJS) | submake-libpq submake-libpgport submake-libpgfeutils
-	$(CC) $(CFLAGS) $(OBJS) $(LDFLAGS) $(LDFLAGS_EX) $(LIBS) -o $@$(X)
+	$(CC) $(CFLAGS) $(OBJS) $(top_builddir)/src/interfaces/libpq/libpq.a $(top_builddir)/src/common/libpgcommon_shlib.a $(LDFLAGS) $(LDFLAGS_EX) $(LIBS) -o $@$(X)
+
+#sse.c: sse.fl
+#  $(FLEX) -I -o $@ $<
 
 help.o: sql_help.h
 

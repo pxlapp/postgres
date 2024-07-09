@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags:
+    - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-linux:
+    name: Build (linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install dependencies (linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y autoconf clang make pkg-config bison libcurl4-openssl-dev libicu-dev libkrb5-dev libreadline-dev libssl-dev zlib1g-dev
+      - name: Make build directory
+        run: rm -rf build && mkdir build
+      - name: Build (linux)
+        run: |
+          ./configure \
+            --disable-debug \
+            --with-openssl \
+            --with-readline
+          make -C src/bin/psql
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src/bin/psql/psql
+          asset_name: pxl-linux-amd64
+          tag: ${{ github.ref }}
+          make_latest: true
+      - name: Upload binaries to stable
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src/bin/psql/psql
+          asset_name: pxl-linux-amd64
+          tag: stable
+          overwrite: true
+
+  build-darwin:
+    name: Build (darwin)
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Install dependencies (arm)
+        run: /opt/homebrew/bin/brew install pkg-config icu4c openssl@3 zlib readline
+      - name: Build (arm)
+        run: |
+          eval "$(/opt/homebrew/bin/brew shellenv)"
+          PKG_CONFIG_PATH=/opt/homebrew/opt/icu4c/lib/pkgconfig \
+          ./configure \
+            --disable-debug \
+            --with-openssl \
+            --with-readline \
+            --with-includes=/opt/homebrew/opt/readline/include:/opt/homebrew/opt/openssl@3/include \
+            --with-libraries=/opt/homebrew/opt/readline/lib:/opt/homebrew/opt/openssl@3/lib
+          make -C src/bin/psql
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src/bin/psql/psql
+          asset_name: pxl-darwin-arm64
+          tag: ${{ github.ref }}
+          make_latest: true
+      - name: Upload binaries to stable
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src/bin/psql/psql
+          asset_name: pxl-darwin-arm64
+          tag: stable
+          overwrite: true
+
+      - name: Clean up
+        run: make clean
+
+      - name: Install dependencies (x86)
+        run: |
+          arch -x86_64 \
+            /usr/local/bin/brew install pkg-config icu4c openssl@3 zlib readline
+      - name: Build (x86)
+        run: |
+          eval "$(/usr/local/bin/brew shellenv)"
+          CFLAGS="-target x86_64-apple-darwin" \
+          PKG_CONFIG_PATH=/usr/local/opt/icu4c/lib/pkgconfig \
+          arch -x86_64 \
+            ./configure \
+              --disable-debug \
+              --with-openssl \
+              --with-readline \
+              --with-includes=/usr/local/opt/readline/include:/usr/local/opt/openssl@3/include \
+              --with-libraries=/usr/local/opt/readline/lib:/usr/local/opt/openssl@3/lib
+          arch -x86_64 \
+            make -C src/bin/psql
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src/bin/psql/psql
+          asset_name: pxl-darwin-amd64
+          tag: ${{ github.ref }}
+          make_latest: true
+      - name: Upload binaries to stable
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src/bin/psql/psql
+          asset_name: pxl-darwin-amd64
+          tag: stable
+          overwrite: true

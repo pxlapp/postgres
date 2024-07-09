@@ -3,6 +3,7 @@
 psql_sources = files(
   'command.c',
   'common.c',
+  'copilot.c',
   'copy.c',
   'crosstabview.c',
   'describe.c',
@@ -48,7 +49,7 @@ psql = executable('psql',
   psql_sources,
   c_pch: pch_postgres_fe_h,
   include_directories: include_directories('.'),
-  dependencies: [frontend_code, libpq, readline],
+  dependencies: [frontend_code, libpq, readline, curl],
   kwargs: default_bin_args,
 )
 bin_targets += psql

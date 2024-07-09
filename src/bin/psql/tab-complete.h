@@ -13,5 +13,6 @@
 extern PQExpBuffer tab_completion_query_buf;
 
 extern void initialize_readline(void);
+char **psql_completion(const char *text, int start, int end);
 
 #endif							/* TAB_COMPLETE_H */

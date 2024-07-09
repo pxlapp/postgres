@@ -17,7 +17,7 @@ dnl Read the Autoconf manual for details.
 dnl
 m4_pattern_forbid(^PGAC_)dnl to catch undefined macros
 
-AC_INIT([PostgreSQL], [18devel], [pgsql-bugs@lists.postgresql.org], [], [https://www.postgresql.org/])
+AC_INIT([PostgreSQL+pxl], [18+pxl], [pgsql-bugs@lists.postgresql.org], [], [https://www.postgresql.org/])
 
 m4_if(m4_defn([m4_PACKAGE_VERSION]), [2.69], [], [m4_fatal([Autoconf version 2.69 is required.
 Untested combinations of 'autoconf' and PostgreSQL versions are not
@@ -970,6 +970,17 @@ if test "$PORTNAME" = "win32"; then
 fi
 AC_SUBST(with_readline)
 
+#
+# Copilot
+#
+AC_MSG_CHECKING([whether to build with copilot support])
+PGAC_ARG_BOOL(with, copilot, yes,
+							[do not use copilot autocompletions])
+if test "$with_readline" != yes && test "$with_copilot" = yes; then
+	AC_MSG_ERROR([cannot enable copilot autocompletions without readline.])
+fi
+AC_SUBST(with_copilot)
+AC_MSG_RESULT([$with_copilot])
 
 #
 # Prefer libedit
@@ -1286,6 +1297,17 @@ If you have readline already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-readline to disable readline support.])
   fi
+fi
+
+#
+# Curl
+#
+if test "$with_copilot" = yes; then
+	AC_CHECK_LIB(curl, curl_global_init, [],
+							 [AC_MSG_ERROR([libcurl library not found
+If you have libcurl already installed, see config.log for details on the
+failure.  It is possible the compiler isn't looking in the proper directory.
+Use --without-copilot to remove the requirement for libcurl.])])
 fi
 
 if test "$with_zlib" = yes; then

@@ -16,6 +16,7 @@
 #include "common.h"
 #include "common/logging.h"
 #include "input.h"
+#include "copilot/copilot.h"
 #include "settings.h"
 #include "tab-complete.h"
 
@@ -361,6 +362,9 @@ initializeInput(int flags)
 
 		/* this reads ~/.inputrc, so do it after rl_variable_bind */
 		rl_initialize();
+
+		/* initialize copilot */
+		copilot_init();
 
 		useHistory = true;
 		using_history();

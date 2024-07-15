@@ -1,4 +1,4 @@
-dnl Process this file with autoconf to produce a configure script.
+nl Process this file with autoconf to produce a configure script.
 dnl configure.ac
 dnl
 dnl Developers, please strive to achieve this order:
@@ -976,9 +976,10 @@ AC_SUBST(with_readline)
 AC_MSG_CHECKING([whether to build with copilot support])
 PGAC_ARG_BOOL(with, copilot, yes,
 							[do not use copilot autocompletions])
-if test "$with_readline" != yes && test "$with_copilot" = yes; then
-	AC_MSG_ERROR([cannot enable copilot autocompletions without readline.])
-fi
+#if test "$with_copilot" = yes && test "$with_readline" = yes; then
+#  AC_MSG_WARN([*** Readline can not be used with copilot])
+#  with_readline=no
+#fi
 AC_SUBST(with_copilot)
 AC_MSG_RESULT([$with_copilot])
 
@@ -987,7 +988,6 @@ AC_MSG_RESULT([$with_copilot])
 #
 PGAC_ARG_BOOL(with, libedit-preferred, no,
               [prefer BSD Libedit over GNU Readline])
-
 
 #
 # UUID library
@@ -1308,6 +1308,8 @@ if test "$with_copilot" = yes; then
 If you have libcurl already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-copilot to remove the requirement for libcurl.])])
+  AC_DEFINE(HAVE_COPILOT, 1,
+           [Define to 1 if you want Copilot Support. (--with-copilot)])
 fi
 
 if test "$with_zlib" = yes; then

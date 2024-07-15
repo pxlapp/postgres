@@ -41,7 +41,7 @@ static void escape_json(StringInfo buf, const char *str);
 
 static void
 copilot_redisplay() {
-#ifndef COPILOT_ENABLED
+#ifndef HAVE_COPILOT
     return rl_redisplay();
 #else
     char tmp_buffer[32];
@@ -62,20 +62,11 @@ copilot_redisplay() {
         write(STDOUT_FILENO, "\033[2K\033[A", 7);
     }
 
-    /* reset current line */
-    write(STDOUT_FILENO, "\033[2K\r", 5);
     num_completion_lines = 0;
 
-    /* tell readline to reset itself for sol settings */
-    rl_on_new_line();
-
-    /* do the normal readline display
-     * at this point we've kind of hack-forced readline
-     * to do a re-print of the current input line
-     */
-    rl_redisplay();
-
-    if (completion_buffer_idx != 0) {
+    if (completion_buffer_idx == 0) {
+        return rl_redisplay();
+    } else {
         /* ansi codes to:
          *  - save cursor
          *  - move cursor to column 9999
@@ -93,6 +84,18 @@ copilot_redisplay() {
         int num_chars_current_line;
         int x1, xs, y2, y3;
         struct termios term_new, term_orig;
+
+        /* reset current line */
+        write(STDOUT_FILENO, "\033[2K\r", 5);
+
+        /* tell readline to reset itself for sol settings */
+        rl_on_new_line();
+
+        /* do the normal readline display
+         * at this point we've kind of hack-forced readline
+         * to do a re-print of the current input line
+         */
+        rl_redisplay();
 
         /* ensure rl_redisplay is flushed out to device
          * before we start our hacking
@@ -202,7 +205,7 @@ copilot_redisplay() {
 
 static int
 copilot_on_event() {
-#ifdef COPILOT_ENABLED
+#ifdef HAVE_COPILOT
     /* skip an input line that looks
      * like a slash command
      */
@@ -281,28 +284,10 @@ end:
     return 0;
 }
 
-int
-copilot_get_meta(char **session_id, char **schema_buffer) {
-    if (pthread_mutex_lock(&mtx) != 0) {
-        fprintf(stderr, "failed to obtain copilot lock\n");
-        return 1;
-    }
-
-    *session_id = sid;
-    *schema_buffer = schema->data;
-
-    if (pthread_mutex_unlock(&mtx) != 0) {
-        fprintf(stderr, "failed to release copilot lock\n");
-        return 1;
-    }
-
-    return 0;
-}
 
 int
 copilot_get_request(
     char **session_id,
-    char **schema_buffer,
     char **prompt_buffer,
     bool *is_prime
 ) {
@@ -315,7 +300,6 @@ copilot_get_request(
     escape_json(prompt, input_buffer);
 
     *session_id = sid;
-    *schema_buffer = schema->data;
     *prompt_buffer = prompt->data;
     *is_prime = prime;
 
@@ -391,7 +375,7 @@ copilot_completion(const char *text, int start, int end) {
 
 void
 copilot_init() {
-#ifdef COPILOT_ENABLED
+#ifdef HAVE_COPILOT
     schema = makeStringInfo();
     pg_strong_random_init();
 
@@ -402,22 +386,26 @@ copilot_init() {
     prompt = makeStringInfo();
     pthread_mutex_init(&mtx, NULL);
 
+#ifdef HAVE_LIBREADLINE
     /* configure readline */
     rl_redisplay_function = copilot_redisplay;
     rl_event_hook = copilot_on_event;
     rl_attempted_completion_function = copilot_completion;
+#endif
+    copilot_refresh_schema();
 #endif
 }
 
 
 void
 copilot_refresh_schema() {
-#ifdef COPILOT_ENABLED
+#ifdef HAVE_COPILOT
     PGresult *res;
     PQExpBuffer buf;
 
 #ifndef COPILOT_DEBUG
-    if (!pg_strong_random(sid, SESSION_ID_SIZE)) {
+    char session_id[SESSION_ID_SIZE];
+    if (!pg_strong_random(session_id, SESSION_ID_SIZE)) {
         pg_log_error("failed to generate session id.");
         return;
     }
@@ -426,7 +414,7 @@ copilot_refresh_schema() {
             sid + i * 2,
             2 * SESSION_ID_SIZE + 1 - i * 2,
             "%02x",
-            (unsigned char)sid[i]
+            (unsigned char)session_id[i]
         );
     }
 #else
@@ -492,8 +480,59 @@ copilot_refresh_schema() {
     escape_json(schema, buf->data);
 
     destroyPQExpBuffer(buf);
+
+    pxl_session(sid, schema->data);
 #endif
 }
+
+
+void
+copilot_chat(char *prompt) {
+    pxl_chat(sid, prompt);
+}
+
+
+void
+copilot_explain(char *query) {
+    PGresult *res;
+    StringInfo prompt;
+    int num_rows;
+
+    res = PSQLexec(query);
+    if (!res) {
+        pg_log_error("failed to execute query.");
+        return;
+    }
+
+    num_rows = PQntuples(res);
+    if (num_rows > 0) {
+        prompt = makeStringInfo();
+        escape_json(
+            prompt,
+            "How can the following query be optimized given its associated query plan below?\n\n"
+            "QUERY:\n"
+            "---------------------------------------\n"
+        );
+        escape_json(prompt, query);
+        escape_json(
+            prompt,
+            ";\n\n"
+            "QUERY PLAN:\n"
+            "---------------------------------------\n"
+        );
+        for (int i = 0; i < num_rows; i++) {
+            const char *row = PQgetvalue(res, i, 0);
+            escape_json(prompt, row);
+            escape_json(prompt, "\n");
+        }
+
+        copilot_chat(prompt->data);
+    }
+
+    destroyStringInfo(prompt);
+    PQclear(res);
+}
+
 
 /* ughhh
  * i've just copy pasted this from src/backend/utils/adt/json.c

@@ -1,4 +1,6 @@
-#!/bin/sh
+#!/bin/bash
+
+{ # this ensures the entire script is downloaded #
 
 #
 # This script should be run via curl:
@@ -56,7 +58,7 @@ PXL_EXE_DIR="$(dirname "${PXL_EXE}")"
 ID_USER=$(id -u)
 ID_GROUP=$(id -g)
 
-function install_binary() {
+install_binary() {
   if [ ! -e "${PXL_EXE_DIR}" ]; then
     echo "=> Creating ${PXL_EXE_DIR}"
     mkdir -p "${PXL_EXE_DIR}"
@@ -90,7 +92,7 @@ function install_binary() {
   echo "=> PXL installed as ${PXL_EXE}"
 }
 
-function pxl_detect_profile() {
+pxl_detect_profile() {
   if [ "${PROFILE-}" = '/dev/null' ]; then
     # the user has specifically requested NOT to have pxl touch their profile
     return
@@ -122,12 +124,14 @@ function pxl_detect_profile() {
   fi
 }
 
-function install_profile() {
-  SOURCE_STR="\\n# Added by PXL; START.\\nalias psql=\"${PXL_EXE}\"\\n# Added by PXL; END."
-  echo
-  read -p "Should psql be aliased to PXL in your shell? " -n 1 -r CONFIRM
-  echo
-  if [ "$CONFIRM" = "Y" -o "$CONFIRM" = "y" ]; then
+install_profile() {
+  #SOURCE_STR="\n# PXL; START.\nalias psql=\"${PXL_EXE}\"\n# PXL; END."
+  SOURCE_STR="alias psql=\"${PXL_EXE}\""
+  read -n 1 -p "Should psql be aliased to PXL in your shell? (Y/n): " answer
+  if [ -z "$answer" ]; then
+  	answer="Y"
+  fi
+  if [ "$answer" = "Y" -o "$answer" = "y" ]; then
     echo "=> Detecting profile"
     PXL_PROFILE="$(pxl_detect_profile)"
     if [ -z "${PXL_PROFILE-}" ]; then
@@ -135,19 +139,27 @@ function install_profile() {
       echo "=> Create one of them and run this script again"
       echo "   OR"
       echo "=> Append the following lines to the correct file yourself:"
-      echo "${SOURCE_STR}"
-    else
-      echo "=> Appending nvm source string to $PXL_PROFILE"
-      echo "${SOURCE_STR}" >> "$PXL_PROFILE"
       echo
-      echo "Restart your shell or run \`source ${PXL_PROFILE}\` for the changes to take effect."
+      echo "${SOURCE_STR}"
+      echo
+    else
+      echo "=> Aliasing psql to PXL in $PXL_PROFILE"
+      echo >> "$PXL_PROFILE"
+      echo "# PXL; START." >> "$PXL_PROFILE"
+      echo "${SOURCE_STR}" >> "$PXL_PROFILE"
+      echo "# PXL; END." >> "$PXL_PROFILE"
+      echo
+      echo "Please restart your shell or run \`source ${PXL_PROFILE}\` for the changes to take effect."
     fi
   else
       echo "=> Append the following lines to your shell profile:"
+      echo
       echo "${SOURCE_STR}"
   fi
 }
 
 
 install_binary
-install_profile
+install_profile </dev/tty
+
+} # this ensures the entire script is downloaded #

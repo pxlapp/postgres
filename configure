@@ -8662,9 +8662,10 @@ else
 fi
 
 
-if test "$with_readline" != yes && test "$with_copilot" = yes; then
-	as_fn_error $? "cannot enable copilot autocompletions without readline." "$LINENO" 5
-fi
+#if test "$with_copilot" = yes && test "$with_readline" = yes; then
+#  AC_MSG_WARN([*** Readline can not be used with copilot])
+#  with_readline=no
+#fi
 
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $with_copilot" >&5
 $as_echo "$with_copilot" >&6; }
@@ -8694,7 +8695,6 @@ else
   with_libedit_preferred=no
 
 fi
-
 
 
 
@@ -12223,6 +12223,9 @@ If you have libcurl already installed, see config.log for details on the
 failure.  It is possible the compiler isn't looking in the proper directory.
 Use --without-copilot to remove the requirement for libcurl." "$LINENO" 5
 fi
+
+
+$as_echo "#define HAVE_COPILOT 1" >>confdefs.h
 
 fi
 

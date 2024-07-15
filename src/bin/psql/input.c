@@ -16,9 +16,12 @@
 #include "common.h"
 #include "common/logging.h"
 #include "input.h"
-#include "copilot/copilot.h"
 #include "settings.h"
 #include "tab-complete.h"
+
+#ifdef HAVE_COPILOT
+#include "copilot/copilot.h"
+#endif
 
 #ifndef WIN32
 #define PSQLHISTORY ".psql_history"
@@ -67,6 +70,8 @@ static void finishInput(void);
 char *
 gets_interactive(const char *prompt, PQExpBuffer query_buf)
 {
+#ifdef HAVE_COPILOT
+#endif
 #ifdef USE_READLINE
 	if (useReadline)
 	{
@@ -363,8 +368,10 @@ initializeInput(int flags)
 		/* this reads ~/.inputrc, so do it after rl_variable_bind */
 		rl_initialize();
 
-		/* initialize copilot */
-		copilot_init();
+#ifdef HAVE_COPILOT
+    /* initialize copilot */
+    copilot_init();
+#endif
 
 		useHistory = true;
 		using_history();

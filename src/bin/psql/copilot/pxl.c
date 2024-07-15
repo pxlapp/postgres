@@ -14,7 +14,7 @@
 #include "sse.h"
 #include "pxl.h"
 
-#ifdef COPILOT_ENABLED
+#ifdef HAVE_COPILOT
 #include <curl/curl.h>
 #endif
 
@@ -89,8 +89,8 @@ on_sse_data(char *ptr, size_t s, size_t nb, void *userdata) {
 
 static void *
 pxl_run(void *params) {
-#ifdef COPILOT_ENABLED
-    char *session_id, *schema, *prompt;
+#ifdef HAVE_COPILOT
+    char *session_id, *prompt;
     bool is_prime;
     StringInfo auth_header;
     CURL *c = NULL;
@@ -130,7 +130,7 @@ pxl_run(void *params) {
             last_req_id = current_req_id;
             current_req_id = req_id;
 
-            if (copilot_get_request(&session_id, &schema, &prompt, &is_prime) != 0) {
+            if (copilot_get_request(&session_id, &prompt, &is_prime) != 0) {
                 pg_log_error("failed to get request.");
                 return NULL;
             }
@@ -138,10 +138,9 @@ pxl_run(void *params) {
             snprintf(
                 request_buffer,
                 sizeof(request_buffer),
-                "{\"sessionId\":\"%s\",\"requestId\":\"%d\",\"schema\":\"%s\",\"prompt\":\"%s\",\"maxTokens\":%d}",
+                "{\"sessionId\":\"%s\",\"requestId\":\"%d\",\"prompt\":\"%s\",\"maxTokens\":%d}",
                 session_id,
                 current_req_id,
-                schema,
                 prompt,
                 is_prime == true ? 0 : 256
             );
@@ -679,7 +678,7 @@ request_auth:
 
 bool
 pxl_init() {
-#ifdef COPILOT_ENABLED
+#ifdef HAVE_COPILOT
     curl_global_init(CURL_GLOBAL_ALL);
 
     /* authenticate */
@@ -708,7 +707,7 @@ pxl_cancel_inflight_requests() {
 }
 
 void
-pxl_chat(char *query) {
+pxl_session(char *session_id, char *schema) {
     CURL *c;
     CURLcode res;
     long http_status;
@@ -716,7 +715,6 @@ pxl_chat(char *query) {
     StringInfo auth_header;
     char url_buffer[1024];
     char request_buffer[PXL_BUFFER_SIZE];
-    char *session_id, *schema;
     int rid = ++req_id;
 
     if (cfg.is_authenticated != true) {
@@ -740,20 +738,91 @@ pxl_chat(char *query) {
         "Content-Type: application/json"
     );
 
-    if (copilot_get_meta(&session_id, &schema) != 0) {
-        pg_log_error("failed to prepare ai request.");
+    snprintf(
+        request_buffer,
+        sizeof(request_buffer),
+        "{\"sessionId\":\"%s\",\"schema\":\"%s\"}",
+        session_id,
+        schema
+    );
+
+    c = curl_easy_init();
+    if (c != NULL) {
+        snprintf(url_buffer, sizeof(url_buffer), "%s/v1/sql/session", cfg.api_url);
+        curl_easy_setopt(c, CURLOPT_URL, url_buffer);
+        curl_easy_setopt(c, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, on_sse_data);
+        curl_easy_setopt(c, CURLOPT_WRITEDATA, sse_init(rid, copilot_on_chat));
+        curl_easy_setopt(c, CURLOPT_POST, 1);
+        curl_easy_setopt(c, CURLOPT_POSTFIELDS, request_buffer);
+        curl_easy_setopt(c, CURLOPT_VERBOSE, 0);
+        curl_easy_setopt(c, CURLOPT_NOPROGRESS, 1);
+        curl_easy_setopt(c, CURLOPT_SSL_VERIFYPEER, 1);
+        curl_easy_setopt(c, CURLOPT_SSL_VERIFYHOST, 1);
+
+        res = curl_easy_perform(c);
+        if (res != CURLE_OK) {
+            pg_log_error("failed to create pxl session.");
+            goto end;
+        }
+
+        res = curl_easy_getinfo(c, CURLINFO_RESPONSE_CODE, &http_status);
+        if (res != CURLE_OK) {
+            pg_log_error("failed to create pxl session.");
+            goto end;
+        }
+
+        if (http_status != 200) {
+            pg_log_error("ai failed.");
+        }
+    }
+
+end:
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(c);
+}
+
+void
+pxl_chat(char *session_id, char *query) {
+    CURL *c;
+    CURLcode res;
+    long http_status;
+    struct curl_slist *headers;
+    StringInfo auth_header;
+    char url_buffer[1024];
+    char request_buffer[PXL_BUFFER_SIZE];
+    int rid = ++req_id;
+
+    if (cfg.is_authenticated != true) {
+        printf("Unable to run ai commands. Authentication required.\n");
         return;
     }
+
+    auth_header = makeStringInfo();
+    if (cfg.access_token != NULL) {
+        appendStringInfo(auth_header, "Authorization: Bearer %s", cfg.access_token);
+    } else if (cfg.api_key != NULL) {
+        appendStringInfo(auth_header, "API-KEY: %s", cfg.api_key);
+    }
+
+    headers = curl_slist_append(
+        NULL,
+        auth_header->data
+    );
+    headers = curl_slist_append(
+        headers,
+        "Content-Type: application/json"
+    );
 
     snprintf(
         request_buffer,
         sizeof(request_buffer),
-        "{\"sessionId\":\"%s\",\"requestId\":\"%d\",\"schema\":\"%s\",\"prompt\":\"%s\"}",
+        "{\"sessionId\":\"%s\",\"requestId\":\"%d\",\"prompt\":\"%s\"}",
         session_id,
         rid,
-        schema,
         query
     );
+
 
     c = curl_easy_init();
     if (c != NULL) {
@@ -782,7 +851,7 @@ pxl_chat(char *query) {
         }
 
         if (http_status != 200) {
-            pg_log_error("ai failed.");
+            pg_log_error("ai failed %ld.", http_status);
         }
     }
 

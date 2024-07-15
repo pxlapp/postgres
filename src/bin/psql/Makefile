@@ -18,7 +18,6 @@ include $(top_builddir)/src/Makefile.global
 
 # make this available to TAP test scripts
 export with_readline
-export with_copilot
 
 REFDOCDIR= $(top_srcdir)/doc/src/sgml/ref
 
@@ -29,9 +28,6 @@ OBJS = \
 	$(WIN32RES) \
 	command.o \
 	common.o \
-	copilot/copilot.o \
-	copilot/pxl.o \
-	copilot/sse.o \
 	copy.o \
 	crosstabview.o \
 	describe.o \
@@ -46,6 +42,13 @@ OBJS = \
 	stringutils.o \
 	tab-complete.o \
 	variables.o
+
+ifeq ($(with_copilot),yes)
+OBJS += \
+	copilot/copilot.o \
+	copilot/pxl.o \
+	copilot/sse.o
+endif
 
 all: psql
 

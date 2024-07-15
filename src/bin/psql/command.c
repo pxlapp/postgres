@@ -47,7 +47,10 @@
 #include "psqlscanslash.h"
 #include "settings.h"
 #include "variables.h"
-#include "copilot/pxl.h"
+
+#ifdef HAVE_COPILOT
+#include "copilot/copilot.h"
+#endif
 
 /*
  * Editable database object types.
@@ -65,8 +68,12 @@ static backslashResult exec_command(const char *cmd,
 									PQExpBuffer query_buf,
 									PQExpBuffer previous_buf);
 static backslashResult exec_command_a(PsqlScanState scan_state, bool active_branch);
+#ifdef HAVE_COPILOT
 static backslashResult exec_command_ai(PsqlScanState scan_state, bool active_branch,
 									   const char *cmd);
+static backslashResult exec_command_aio(PsqlScanState scan_state, bool active_branch,
+									    const char *cmd);
+#endif
 static backslashResult exec_command_bind(PsqlScanState scan_state, bool active_branch);
 static backslashResult exec_command_C(PsqlScanState scan_state, bool active_branch);
 static backslashResult exec_command_connect(PsqlScanState scan_state, bool active_branch);
@@ -312,11 +319,15 @@ exec_command(const char *cmd,
 					   cmd);
 	}
 
-    if (strcmp(cmd, "ai") == 0)
-		status = exec_command_ai(scan_state, active_branch, cmd);
-    else if (strcmp(cmd, "a") == 0)
+    if (strcmp(cmd, "a") == 0)
 		status = exec_command_a(scan_state, active_branch);
-	else if (strcmp(cmd, "bind") == 0)
+#ifdef HAVE_COPILOT
+    else if (strcmp(cmd, "ai") == 0)
+        status = exec_command_ai(scan_state, active_branch, cmd);
+    else if (strcmp(cmd, "aio") == 0)
+        status = exec_command_aio(scan_state, active_branch, cmd);
+#endif
+    else if (strcmp(cmd, "bind") == 0)
 		status = exec_command_bind(scan_state, active_branch);
 	else if (strcmp(cmd, "C") == 0)
 		status = exec_command_C(scan_state, active_branch);
@@ -463,6 +474,7 @@ exec_command_a(PsqlScanState scan_state, bool active_branch)
 	return success ? PSQL_CMD_SKIP_LINE : PSQL_CMD_ERROR;
 }
 
+#ifdef HAVE_COPILOT
 /*
  * \ai -- ask ai
  */
@@ -478,9 +490,10 @@ exec_command_ai(PsqlScanState scan_state, bool active_branch, const char *cmd)
 		while ((opt = psql_scan_slash_option(scan_state, OT_NORMAL, NULL, false))) {
 			appendPQExpBufferStr(query, opt);
 			appendPQExpBufferChar(query, ' ');
+            free(opt);
         }
         if (query->len) {
-            pxl_chat(query->data);
+            copilot_chat(query->data);
         }
 	}
 
@@ -488,6 +501,42 @@ exec_command_ai(PsqlScanState scan_state, bool active_branch, const char *cmd)
 
 	return success ? PSQL_CMD_SKIP_LINE : PSQL_CMD_ERROR;
 }
+
+/*
+ * \aio -- get ai to recommend optimizations based on EXPLAIN
+ */
+static backslashResult
+exec_command_aio(PsqlScanState scan_state, bool active_branch, const char *cmd)
+{
+	bool		success = true;
+	PQExpBuffer query = createPQExpBuffer();
+
+	if (active_branch)
+	{
+	    char *opt;
+	    char quote;
+        appendPQExpBuffer(query, "EXPLAIN ");
+		while ((opt = psql_scan_slash_option(scan_state, OT_NORMAL, &quote, true))) {
+            if (quote != '\0') {
+                appendPQExpBufferChar(query, quote);
+            }
+			appendPQExpBufferStr(query, opt);
+            if (quote != '\0') {
+                appendPQExpBufferChar(query, quote);
+            }
+			appendPQExpBufferChar(query, ' ');
+            free(opt);
+        }
+        if (query->len) {
+            copilot_explain(query->data);
+        }
+	}
+
+	destroyPQExpBuffer(query);
+
+	return success ? PSQL_CMD_SKIP_LINE : PSQL_CMD_ERROR;
+}
+#endif
 
 /*
  * \bind -- set query parameters
@@ -3779,7 +3828,9 @@ do_connect(enum trivalue reuse_previous_specification,
 		pset.dead_conn = NULL;
 	}
 
+#ifdef HAVE_COPILOT
 	copilot_refresh_schema();
+#endif
 
 	return true;
 }

@@ -19,11 +19,10 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y autoconf clang make pkg-config bison libcurl4-openssl-dev libicu-dev libkrb5-dev libreadline-dev libssl-dev zlib1g-dev
-      - name: Make build directory
-        run: rm -rf build && mkdir build
-      - name: Build (linux)
+      - name: Build (x86)
         run: |
           ./configure \
+            --host=x86_64-linux-gnu \
             --disable-debug \
             --with-openssl \
             --with-readline
@@ -44,6 +43,30 @@ jobs:
           asset_name: pxl-linux-amd64
           tag: stable
           overwrite: true
+      - name: Build (arm64)
+        run: |
+          ./configure \
+            --host=aarch64-linux-gnu \
+            --disable-debug \
+            --with-openssl \
+            --with-readline
+          make -C src/bin/psql
+      - name: Upload binaries to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src/bin/psql/psql
+          asset_name: pxl-linux-arm64
+          tag: ${{ github.ref }}
+          make_latest: true
+      - name: Upload binaries to stable
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: src/bin/psql/psql
+          asset_name: pxl-linux-arm64
+          tag: stable
+          overwrite: true
 
   build-darwin:
     name: Build (darwin)
@@ -58,6 +81,7 @@ jobs:
           eval "$(/opt/homebrew/bin/brew shellenv)"
           PKG_CONFIG_PATH=/opt/homebrew/opt/icu4c/lib/pkgconfig \
           ./configure \
+            --host=arm64-apple-darwin \
             --disable-debug \
             --with-openssl \
             --with-readline \
@@ -91,10 +115,10 @@ jobs:
       - name: Build (x86)
         run: |
           eval "$(/usr/local/bin/brew shellenv)"
-          CFLAGS="-target x86_64-apple-darwin" \
           PKG_CONFIG_PATH=/usr/local/opt/icu4c/lib/pkgconfig \
           arch -x86_64 \
             ./configure \
+              --host=x86_64-apple-darwin \
               --disable-debug \
               --with-openssl \
               --with-readline \

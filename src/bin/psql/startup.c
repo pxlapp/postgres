@@ -23,7 +23,6 @@
 #include "getopt_long.h"
 #include "help.h"
 #include "input.h"
-#include "copilot/copilot.h"
 #include "mainloop.h"
 #include "settings.h"
 
@@ -72,6 +71,7 @@ struct adhoc_opts
 	char	   *username;
 	char	   *logfilename;
 	bool		no_readline;
+	bool		no_copilot;
 	bool		no_psqlrc;
 	bool		single_txn;
 	bool		list_dbs;
@@ -455,12 +455,18 @@ error:
 	 */
 	else
 	{
+	    int flags = 0;
+	    if (options.no_readline == false) {
+	        flags |= (1 << 0);
+        }
+        if (options.no_copilot == false) {
+	        flags |= (1 << 1);
+        }
 		pg_logging_config(PG_LOG_FLAG_TERSE);
 		connection_warnings(true);
 		if (!pset.quiet)
 			printf(_("Type \"help\" for help.\n\n"));
-		initializeInput(options.no_readline ? 0 : 1);
-		copilot_refresh_schema();
+		initializeInput(flags);
 		successResult = MainLoop(stdin);
 	}
 
@@ -500,7 +506,12 @@ parse_psql_options(int argc, char *argv[], struct adhoc_opts *options)
 		{"html", no_argument, NULL, 'H'},
 		{"list", no_argument, NULL, 'l'},
 		{"log-file", required_argument, NULL, 'L'},
+#ifdef USE_READLINE
 		{"no-readline", no_argument, NULL, 'n'},
+#endif
+#ifdef HAVE_COPILOT
+		{"no-copilot", no_argument, NULL, 'n'},
+#endif
 		{"single-transaction", no_argument, NULL, '1'},
 		{"output", required_argument, NULL, 'o'},
 		{"port", required_argument, NULL, 'p'},
@@ -585,7 +596,12 @@ parse_psql_options(int argc, char *argv[], struct adhoc_opts *options)
 				options->logfilename = pg_strdup(optarg);
 				break;
 			case 'n':
+#ifdef USE_READLINE
 				options->no_readline = true;
+#endif
+#ifdef HAVE_COPILOT
+				options->no_copilot = true;
+#endif
 				break;
 			case 'o':
 				if (!setQFout(optarg))

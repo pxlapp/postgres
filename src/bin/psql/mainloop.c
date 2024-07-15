@@ -15,7 +15,10 @@
 #include "mb/pg_wchar.h"
 #include "prompt.h"
 #include "settings.h"
+
+#ifdef HAVE_COPILOT
 #include "copilot/pxl.h"
+#endif
 
 /* callback functions for our flex lexer */
 const PsqlScanCallbacks psqlscan_callbacks = {
@@ -123,7 +126,9 @@ MainLoop(FILE *source)
 
 			if (pset.cur_cmd_interactive)
 			{
+#ifdef HAVE_COPILOT
 			    pxl_cancel_inflight_requests();
+#endif
 				putc('\n', stdout);
 
 				/*

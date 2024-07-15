@@ -495,7 +495,6 @@ copilot_chat(char *prompt) {
 void
 copilot_explain(char *query) {
     PGresult *res;
-    StringInfo prompt;
     int num_rows;
 
     res = PSQLexec(query);
@@ -506,7 +505,7 @@ copilot_explain(char *query) {
 
     num_rows = PQntuples(res);
     if (num_rows > 0) {
-        prompt = makeStringInfo();
+        StringInfo prompt = makeStringInfo();
         escape_json(
             prompt,
             "How can the following query be optimized given its associated query plan below?\n\n"

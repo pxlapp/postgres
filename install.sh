@@ -130,6 +130,8 @@ install_profile() {
   read -n 1 -p "Should psql be aliased to PXL in your shell? (Y/n): " answer
   if [ -z "$answer" ]; then
   	answer="Y"
+  else
+    echo
   fi
   if [ "$answer" = "Y" -o "$answer" = "y" ]; then
     echo "=> Detecting profile"

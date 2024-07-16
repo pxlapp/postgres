@@ -425,22 +425,29 @@ copilot_refresh_schema() {
     buf = createPQExpBuffer();
 
     res = PSQLexec(
-        "SELECT table_name\n"
-        "FROM information_schema.tables\n"
-        "WHERE table_schema = 'public' AND table_type = 'BASE TABLE'\n"
-        "ORDER BY table_name"
+        "SELECT n.nspname, c.oid, c.relname\n"
+        "FROM pg_catalog.pg_class c\n"
+        "LEFT JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace\n"
+        "WHERE\n"
+        " n.nspname = 'public' AND\n"
+        " c.relkind = 'r'"
     );
+
     if (!res) {
         pg_log_error("failed to refresh schema.");
         return;
     }
 
     for (int i = 0; i < PQntuples(res); i++) {
+        /*const char *ns;*/
+        /*const char *oid;*/
         const char *table;
         char qry[1024];
         PGresult *r;
 
-        table = PQgetvalue(res, i, 0);
+        /*ns = PQgetvalue(res, i, 0);*/
+        /*oid = PQgetvalue(res, i, 1);*/
+        table = PQgetvalue(res, i, 2);
 
         snprintf(
             qry,
@@ -473,6 +480,37 @@ copilot_refresh_schema() {
         PQclear(r);
 
         appendPQExpBuffer(buf, "\n);\n");
+
+        /*snprintf(*/
+        /*    qry,*/
+        /*    sizeof(qry),*/
+        /*    "SELECT indexdef FROM pg_indexes WHERE tablename = '%s'",*/
+        /*    table*/
+        /*);*/
+        /*r = PSQLexec(qry);*/
+        /*for (int j = 0; j < PQntuples(r); j++) {*/
+        /*    const char *index = PQgetvalue(r, j, 0);*/
+        /*    appendPQExpBuffer(buf, "%s;\n", index);*/
+        /*}*/
+        /*PQclear(r);*/
+
+        /*snprintf(*/
+        /*    qry,*/
+        /*    sizeof(qry),*/
+        /*    "SELECT conname, pg_catalog.pg_get_constraintdef(oid, true) AS condef\n"*/
+        /*    "FROM pg_catalog.pg_constraint\n"*/
+        /*    "WHERE conrelid = '%s'",*/
+        /*    oid*/
+        /*);*/
+        /*r = PSQLexec(qry);*/
+        /*for (int j = 0; j < PQntuples(r); j++) {*/
+        /*    const char *name = PQgetvalue(r, j, 0);*/
+        /*    const char *def = PQgetvalue(r, j, 1);*/
+        /*    appendPQExpBuffer(buf, "ALTER TABLE %s ADD CONSTRAINT %s %s;\n", table, name, def);*/
+        /*}*/
+        /*PQclear(r);*/
+
+        appendPQExpBuffer(buf, "\n");
     }
 
     PQclear(res);

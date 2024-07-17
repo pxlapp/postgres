@@ -89,6 +89,7 @@ copilot_redisplay() {
         write(STDOUT_FILENO, "\033[2K\r", 5);
 
         /* tell readline to reset itself for sol settings */
+        rl_clear_visible_line();
         rl_on_new_line();
 
         /* do the normal readline display
@@ -183,16 +184,13 @@ copilot_redisplay() {
          * we also clip the number of lines to max screen
          * height
          */
-        num_chars_current_line = 0, y3 = y2;
-        for (int i = completion_buffer_idx; i >= 0; i--) {
-            if (completion_buffer[i] == '\n') {
-                y3 -= (num_chars_current_line / xs + 1);
+        num_chars_current_line = x1, y3 = y2;
+        for (int i = 0; i < completion_buffer_idx; i++) {
+            if (completion_buffer[i] == '\n' || ++num_chars_current_line >= xs) {
+                y3--;
                 num_chars_current_line = 0;
-            } else {
-                num_chars_current_line++;
             }
         }
-        y3 -= (num_chars_current_line / xs);
         if (y3 < 1) y3 = 1;
         num_completion_lines = y2 - y3;
 

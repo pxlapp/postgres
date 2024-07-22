@@ -369,8 +369,8 @@ initializeInput(int flags)
 		rl_initialize();
 
 #ifdef HAVE_COPILOT
-    /* initialize copilot */
-    copilot_init();
+        /* initialize copilot */
+        copilot_init();
 #endif
 
 		useHistory = true;

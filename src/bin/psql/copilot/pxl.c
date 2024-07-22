@@ -20,22 +20,22 @@
 
 
 #ifndef WIN32
-#define PXLCFG        ".pxl"
+#define PXLCFG        ".pxl-psql"
 #else
-#define PXLCFG        "pxl.conf"
+#define PXLCFG        "pxl-psql.conf"
 #endif
 
 #define PXL_BUFFER_SIZE 40*1024
 
 typedef enum {
-    PXL_CFG_CK_NULL,
-    PXL_CFG_CK_API_URL,
-    PXL_CFG_CK_ACCESS_TOKEN,
-    PXL_CFG_CK_API_KEY,
-} pxl_cfg_ck;
+    PXL_CFG_PARSE_STATE_INIT,
+    PXL_CFG_PARSE_STATE_API_URL,
+    PXL_CFG_PARSE_STATE_ACCESS_TOKEN,
+    PXL_CFG_PARSE_STATE_API_KEY,
+} pxl_cfg_parse_state;
 
 typedef struct {
-    pxl_cfg_ck ck;
+    pxl_cfg_parse_state s;
     bool is_authenticated;
     char *api_url;
     char *access_token;
@@ -43,14 +43,14 @@ typedef struct {
 } pxl_cfg;
 
 typedef enum {
-    PXL_DEVICE_CODE_CK_NULL,
-    PXL_DEVICE_CODE_CK_DEVICE_CODE,
-    PXL_DEVICE_CODE_CK_USER_CODE,
-    PXL_DEVICE_CODE_CK_URL,
-} pxl_device_code_ck;
+    PXL_DEVICE_CODE_PARSE_STATE_INIT,
+    PXL_DEVICE_CODE_PARSE_STATE_DEVICE_CODE,
+    PXL_DEVICE_CODE_PARSE_STATE_USER_CODE,
+    PXL_DEVICE_CODE_PARSE_STATE_URL,
+} pxl_device_code_parse_state;
 
 typedef struct {
-    pxl_device_code_ck ck;
+    pxl_device_code_parse_state s;
     char *device_code;
     char *user_code;
     char *url;
@@ -204,33 +204,33 @@ pxl_run(void *params) {
 
 
 static JsonParseErrorType
-json_cfg_object_field_start(void *state, char *fname, bool isnull) {
-    pxl_cfg *s = state;
+cfg_json_key(void *state, char *fname, bool isnull) {
+    pxl_cfg *cfg = state;
     if (strcmp(fname, "apiUrl") == 0) {
-        s->ck = PXL_CFG_CK_API_URL;
+        cfg->s = PXL_CFG_PARSE_STATE_API_URL;
     } else if (strcmp(fname, "accessToken") == 0) {
-        s->ck = PXL_CFG_CK_ACCESS_TOKEN;
+        cfg->s = PXL_CFG_PARSE_STATE_ACCESS_TOKEN;
     } else if (strcmp(fname, "apiKey") == 0) {
-        s->ck = PXL_CFG_CK_API_KEY;
+        cfg->s = PXL_CFG_PARSE_STATE_API_KEY;
     } else {
-        s->ck = PXL_CFG_CK_NULL;
+        cfg->s = PXL_CFG_PARSE_STATE_INIT;
     }
     return JSON_SUCCESS;
 }
 
 
 static JsonParseErrorType
-json_cfg_scalar(void *state, char *token, JsonTokenType token_type) {
-    pxl_cfg *s = state;
-    switch (s->ck) {
-        case PXL_CFG_CK_API_URL:
-            s->api_url = strdup(token);
+cfg_json_value(void *state, char *token, JsonTokenType token_type) {
+    pxl_cfg *cfg = state;
+    switch (cfg->s) {
+        case PXL_CFG_PARSE_STATE_API_URL:
+            cfg->api_url = strdup(token);
             break;
-        case PXL_CFG_CK_ACCESS_TOKEN:
-            s->access_token = strdup(token);
+        case PXL_CFG_PARSE_STATE_ACCESS_TOKEN:
+            cfg->access_token = strdup(token);
             break;
-        case PXL_CFG_CK_API_KEY:
-            s->api_key = strdup(token);
+        case PXL_CFG_PARSE_STATE_API_KEY:
+            cfg->api_key = strdup(token);
             break;
         default:
             break;
@@ -240,33 +240,33 @@ json_cfg_scalar(void *state, char *token, JsonTokenType token_type) {
 
 
 static JsonParseErrorType
-json_device_code_object_field_start(void *state, char *fname, bool isnull) {
-    pxl_device_code *s = state;
+device_code_json_key(void *state, char *fname, bool isnull) {
+    pxl_device_code *dc = state;
     if (strcmp(fname, "device_code") == 0) {
-        s->ck = PXL_DEVICE_CODE_CK_DEVICE_CODE;
+        dc->s = PXL_DEVICE_CODE_PARSE_STATE_DEVICE_CODE;
     } else if (strcmp(fname, "user_code") == 0) {
-        s->ck = PXL_DEVICE_CODE_CK_USER_CODE;
+        dc->s = PXL_DEVICE_CODE_PARSE_STATE_USER_CODE;
     } else if (strcmp(fname, "verification_uri") == 0) {
-        s->ck = PXL_DEVICE_CODE_CK_URL;
+        dc->s = PXL_DEVICE_CODE_PARSE_STATE_URL;
     } else {
-        s->ck = PXL_DEVICE_CODE_CK_NULL;
+        dc->s = PXL_DEVICE_CODE_PARSE_STATE_INIT;
     }
     return JSON_SUCCESS;
 }
 
 
 static JsonParseErrorType
-json_device_code_scalar(void *state, char *token, JsonTokenType token_type) {
-    pxl_device_code *s = state;
-    switch (s->ck) {
-        case PXL_DEVICE_CODE_CK_DEVICE_CODE:
-            s->device_code = strdup(token);
+device_code_json_value(void *state, char *token, JsonTokenType token_type) {
+    pxl_device_code *dc = state;
+    switch (dc->s) {
+        case PXL_DEVICE_CODE_PARSE_STATE_DEVICE_CODE:
+            dc->device_code = strdup(token);
             break;
-        case PXL_DEVICE_CODE_CK_USER_CODE:
-            s->user_code = strdup(token);
+        case PXL_DEVICE_CODE_PARSE_STATE_USER_CODE:
+            dc->user_code = strdup(token);
             break;
-        case PXL_DEVICE_CODE_CK_URL:
-            s->url = strdup(token);
+        case PXL_DEVICE_CODE_PARSE_STATE_URL:
+            dc->url = strdup(token);
             break;
         default:
             break;
@@ -276,18 +276,18 @@ json_device_code_scalar(void *state, char *token, JsonTokenType token_type) {
 
 
 static JsonParseErrorType
-json_access_token_object_field_start(void *state, char *fname, bool isnull) {
-    pxl_access_token *s = state;
-    s->is_token = (strcmp(fname, "access_token") == 0);
+access_token_json_key(void *state, char *fname, bool isnull) {
+    pxl_access_token *at = state;
+    at->is_token = (strcmp(fname, "access_token") == 0);
     return JSON_SUCCESS;
 }
 
 
 static JsonParseErrorType
-json_access_token_scalar(void *state, char *token, JsonTokenType token_type) {
-    pxl_access_token *s = state;
-    if (s->is_token == true) {
-        s->access_token = token;
+access_token_json_value(void *state, char *token, JsonTokenType token_type) {
+    pxl_access_token *at = state;
+    if (at->is_token == true) {
+        at->access_token = token;
     }
     return JSON_SUCCESS;
 }
@@ -367,8 +367,8 @@ pxl_authenticate() {
     lex = makeJsonLexContextCstringLen(NULL, tmp_buffer->data, tmp_buffer->len, PG_UTF8, true);
     memset(&sem, 0, sizeof(sem));
     sem.semstate = &cfg;
-    sem.object_field_start = json_cfg_object_field_start;
-    sem.scalar = json_cfg_scalar;
+    sem.object_field_start = cfg_json_key;
+    sem.scalar = cfg_json_value;
 
     json_error = pg_parse_json(lex, &sem);
     freeJsonLexContext(lex);
@@ -515,8 +515,8 @@ request_auth:
     lex = makeJsonLexContextCstringLen(NULL, res_buffer->data, res_buffer->len, PG_UTF8, true);
     memset(&sem, 0, sizeof(sem));
     sem.semstate = &dc;
-    sem.object_field_start = json_device_code_object_field_start;
-    sem.scalar = json_device_code_scalar;
+    sem.object_field_start = device_code_json_key;
+    sem.scalar = device_code_json_value;
 
     json_error = pg_parse_json(lex, &sem);
     freeJsonLexContext(lex);
@@ -606,8 +606,8 @@ request_auth:
         lex = makeJsonLexContextCstringLen(NULL, res_buffer->data, res_buffer->len, PG_UTF8, true);
         memset(&sem, 0, sizeof(sem));
         sem.semstate = &at;
-        sem.object_field_start = json_access_token_object_field_start;
-        sem.scalar = json_access_token_scalar;
+        sem.object_field_start = access_token_json_key;
+        sem.scalar = access_token_json_value;
 
         json_error = pg_parse_json(lex, &sem);
         freeJsonLexContext(lex);

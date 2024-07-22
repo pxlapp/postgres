@@ -1,5 +1,4 @@
 #include "sse.h"
-/*#include "copilot.h"*/
 
 #include "common/jsonapi.h"
 #include "mb/pg_wchar.h"
@@ -82,11 +81,16 @@ sse_parse(sse *s, const char *str, size_t len) {
 }
 
 
+typedef enum {
+    SSE_DATA_PARSE_STATE_INIT,
+    SSE_DATA_PARSE_STATE_TOKEN,
+    SSE_DATA_PARSE_STATE_STOP,
+    SSE_DATA_PARSE_STATE_ERROR,
+    SSE_DATA_PARSE_STATE_CANCEL
+} sse_data_parse_state;
+
 typedef struct {
-    bool is_token;
-    bool is_stop;
-    bool is_error;
-    bool is_cancel;
+    sse_data_parse_state s;
     char *token;
     bool stop;
     bool error;
@@ -94,31 +98,31 @@ typedef struct {
 } sse_elem_parse_state;
 
 static JsonParseErrorType
-json_sse_object_field_start(void *state, char *fname, bool isnull) {
+sse_json_key(void *state, char *fname, bool isnull) {
     sse_elem_parse_state *s = state;
     if (strcmp(fname, "token") == 0) {
-        s->is_token = true;
+        s->s = SSE_DATA_PARSE_STATE_TOKEN;
     } else if (strcmp(fname, "stop") == 0) {
-        s->is_stop = true;
+        s->s = SSE_DATA_PARSE_STATE_STOP;
     } else if (strcmp(fname, "error") == 0) {
-        s->is_error = true;
+        s->s = SSE_DATA_PARSE_STATE_ERROR;
     } else if (strcmp(fname, "cancel") == 0) {
-        s->is_cancel = true;
+        s->s = SSE_DATA_PARSE_STATE_CANCEL;
     }
     return JSON_SUCCESS;
 }
 
 
 static JsonParseErrorType
-json_sse_scalar(void *state, char *token, JsonTokenType token_type) {
+sse_json_value(void *state, char *token, JsonTokenType token_type) {
     sse_elem_parse_state *s = state;
-    if (s->is_token == true && token_type == JSON_TOKEN_STRING) {
+    if (s->s == SSE_DATA_PARSE_STATE_TOKEN && token_type == JSON_TOKEN_STRING) {
         s->token = token;
-    } else if (s->is_stop == true && token_type == JSON_TOKEN_TRUE) {
+    } else if (s->s == SSE_DATA_PARSE_STATE_STOP && token_type == JSON_TOKEN_TRUE) {
         s->stop = true;
-    } else if (s->is_error == true && token_type == JSON_TOKEN_TRUE) {
+    } else if (s->s == SSE_DATA_PARSE_STATE_ERROR && token_type == JSON_TOKEN_TRUE) {
         s->error = true;
-    } else if (s->is_cancel == true && token_type == JSON_TOKEN_TRUE) {
+    } else if (s->s == SSE_DATA_PARSE_STATE_CANCEL && token_type == JSON_TOKEN_TRUE) {
         s->cancel = true;
     }
     return JSON_SUCCESS;
@@ -142,8 +146,8 @@ parse(sse *s) {
     memset(&sem, 0, sizeof(sem));
     memset(&p, 0, sizeof(p));
     sem.semstate = &p;
-    sem.object_field_start = json_sse_object_field_start;
-    sem.scalar = json_sse_scalar;
+    sem.object_field_start = sse_json_key;
+    sem.scalar = sse_json_value;
 
     json_error = pg_parse_json(lex, &sem);
     if (json_error == JSON_SUCCESS) {
